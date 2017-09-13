@@ -170,12 +170,13 @@
   //          No accumulator is given so the first element is used.
   _.reduce = function(collection, iterator, accumulator) {
     let index = 0;
+    let keys = Object.keys(collection);
     if (accumulator === undefined) {
-      accumulator = collection[index];
+      accumulator = collection[keys[index]];
       index++;
     }
-    for (index; index < collection.length; index++) {
-      accumulator = iterator(accumulator, collection[index]);
+    for (index; index < keys.length; index++) {
+      accumulator = iterator(accumulator, collection[keys[index]]);
     }
     return accumulator;
   };
@@ -196,12 +197,23 @@
   // Determine whether all of the elements match a truth test.
   _.every = function(collection, iterator) {
     // TIP: Try re-using reduce() here.
+    iterator = iterator || _.identity;
+    return _.reduce(collection, function(wasTrue, item) {
+      if (!wasTrue) {
+        return false;
+      }
+      return !!iterator(item);
+    }, true);
   };
 
   // Determine whether any of the elements pass a truth test. If no iterator is
   // provided, provide a default one
   _.some = function(collection, iterator) {
     // TIP: There's a very clever way to re-use every() here.
+    iterator = iterator || _.identity;
+    return !_.every(collection, function(item) {
+      return !!iterator(item) === false;
+    });
   };
 
 
@@ -224,11 +236,27 @@
   //     bla: "even more stuff"
   //   }); // obj1 now contains key1, key2, key3 and bla
   _.extend = function(obj) {
+    let sourceObjs = Object.values(arguments).slice(1);
+    _.each(sourceObjs, function(sourceObj) {
+      Object.assign(obj, sourceObj);
+    });
+    return obj;
   };
 
   // Like extend, but doesn't ever overwrite a key that already
   // exists in obj
   _.defaults = function(obj) {
+    let sourceObjs = Object.values(arguments).slice(1);
+    _.each(sourceObjs, function(sourceObj) {
+      let objKeys = Object.keys(obj);
+      let sourceObjKeys = Object.keys(sourceObj);
+      _.each(sourceObjKeys, function(key, value) {
+        if (!objKeys.includes(key)) {
+          obj[key] = sourceObj[key];
+        }
+      });
+    });
+    return obj;
   };
 
 
@@ -272,6 +300,17 @@
   // already computed the result for the given argument and return that value
   // instead if possible.
   _.memoize = function(func) {
+    var result = {};
+
+    return function() {
+      let funcArgs = JSON.stringify(arguments);
+
+      if (result[funcArgs] === undefined) {
+        result[funcArgs] = func.apply(this, arguments);
+      }
+
+      return result[funcArgs];
+    };
   };
 
   // Delays a function for the given number of milliseconds, and then calls
@@ -281,6 +320,10 @@
   // parameter. For example _.delay(someFunction, 500, 'a', 'b') will
   // call someFunction('a', 'b') after 500ms
   _.delay = function(func, wait) {
+    let args = Object.values(arguments).slice(2);
+    var timeoutID = setTimeout(function() {
+      func.apply(this,args);
+    }, wait);
   };
 
 
@@ -295,6 +338,14 @@
   // input array. For a tip on how to make a copy of an array, see:
   // http://mdn.io/Array.prototype.slice
   _.shuffle = function(array) {
+    let originalCopy = array.slice();
+    let newArray = [];
+    for (let i = 0; i < array.length; i++) {
+      let randomIndex = Math.floor(Math.random() * originalCopy.length);
+      let transferElement = originalCopy.splice(randomIndex, 1);
+      newArray.push(transferElement[0]);
+    }
+    return newArray;
   };
 
 
@@ -309,6 +360,14 @@
   // Calls the method named by functionOrKey on each value in the list.
   // Note: You will need to learn a bit about .apply to complete this.
   _.invoke = function(collection, functionOrKey, args) {
+    return _.map(collection, function (element) {
+      if (typeof(functionOrKey) === 'function') {
+        return functionOrKey.apply(element, args);
+      } else {
+        return element[functionOrKey].apply(element, args);
+      }
+      
+    });
   };
 
   // Sort the object's values by a criterion produced by an iterator.
@@ -316,6 +375,13 @@
   // of that string. For example, _.sortBy(people, 'name') should sort
   // an array of people by their name.
   _.sortBy = function(collection, iterator) {
+    return collection.sort(function(a, b) {
+      if (typeof(iterator) === 'function') {
+        return iterator(a) - iterator(b);
+      } else {
+        return a[iterator] - b[iterator];
+      }
+    });
   };
 
   // Zip together two or more arrays with elements of the same index
@@ -324,6 +390,21 @@
   // Example:
   // _.zip(['a','b','c','d'], [1,2,3]) returns [['a',1], ['b',2], ['c',3], ['d',undefined]]
   _.zip = function() {
+    let inputArrays = Object.values(arguments).slice();
+    let result = [];
+    let longestLength = _.reduce(inputArrays, function(longest, current) {
+      if (current.length > longest) {
+        return current.length;
+      } else {return longest}
+    }, 0);
+    for (let i = 0; i < longestLength; i++) {
+      let elements = []
+      _.each(inputArrays, function (array) {
+        elements.push(array[i]);
+      });
+      result.push(elements);
+    }
+    return result;
   };
 
   // Takes a multidimensional array and converts it to a one-dimensional array.
@@ -331,16 +412,49 @@
   //
   // Hint: Use Array.isArray to check if something is an array
   _.flatten = function(nestedArray, result) {
+    result = result || [];
+    let getElement = function(array) {
+      _.each(array, function(element) {
+        if(Array.isArray(element)) {
+          getElement(element);
+        } else {
+          result.push(element);
+        }
+      });
+    };
+    getElement(nestedArray);
+    return result;
   };
 
   // Takes an arbitrary number of arrays and produces an array that contains
   // every item shared between all the passed-in arrays.
   _.intersection = function() {
+    let result = [];
+    let inputArrays = Object.values(arguments).slice();
+    let firstArray = inputArrays[0];
+    _.each(firstArray, function(item) {
+      if (_.every(inputArrays, function(array) {
+        return array.includes(item);
+      })) {
+        result.push(item);
+      }
+    });
+    return result;
   };
 
   // Take the difference between one array and a number of other arrays.
   // Only the elements present in just the first array will remain.
   _.difference = function(array) {
+    let result = [];
+    let comparedArrays = Object.values(arguments).slice(1);
+    _.each(array, function(item) {
+      if(!_.some(comparedArrays, function(array) {
+        return array.includes(item);
+      })) {
+        result.push(item);
+      }
+    });
+    return result;
   };
 
   // Returns a function, that, when invoked, will only be triggered at most once
